@@ -1,8 +1,9 @@
 ﻿var builder = DistributedApplication.CreateBuilder(args);
 
-var mongo = builder.AddMongoDB("mongo")
+var mongo = builder.AddMongoDB("mongo", port: 27017)
                     .WithMongoExpress()
-                   .WithLifetime(ContainerLifetime.Persistent);
+                    .WithLifetime(ContainerLifetime.Persistent)
+                    .WithDataVolume("MongoData");
 
 var mongodb = mongo.AddDatabase("mongodb");
 
