@@ -10,6 +10,7 @@
     <PackageReference Include="Abot" Version="2.0.70" />
     <PackageReference Include="AngleSharp" Version="1.4.0" />
     <PackageReference Include="Aspire.MongoDB.Driver" Version="13.2.2" />
+    <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.2.2" />
     <PackageReference Include="MongoDB.Driver" Version="3.7.1" />
   </ItemGroup>
 

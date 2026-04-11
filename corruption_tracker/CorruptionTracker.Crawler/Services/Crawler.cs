@@ -2,7 +2,7 @@ using Abot2.Crawler;
 using Abot2.Poco;
 using AngleSharp;
 using CorruptionTracker.Crawler.Models;
-using MongoDB.Driver;
+using CorruptionTracker.Crawler.Repositories;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -12,7 +12,7 @@ namespace CorruptionTracker.Crawler.Services;
 public class Crawler : BackgroundService
 {
     private readonly ILogger<Crawler> _logger;
-    private readonly IMongoDatabase _mongoClient;
+    private readonly IDocumentoRepository _repository;
 
     private readonly string[] Seeds = new[]
     {
@@ -31,7 +31,11 @@ public class Crawler : BackgroundService
         "https://www.gazetadopovo.com.br/republica/suspeita-de-crimes-envolvendo-moraes-e-o-banco-master-impulsiona-pedidos-de-impeachment/",
         "https://www.bbc.com/portuguese/articles/cvg555lkw9po",
         "https://x.com/TI_InterBr/status/2034936047381983616",
-        "https://www1.folha.uol.com.br/folha-topicos/corrupcao/"
+        "https://www1.folha.uol.com.br/folha-topicos/corrupcao/",
+        "https://www.infomoney.com.br/colunistas/economia-e-politica-direto-ao-ponto/especial-resumao-completo-sobre-a-operacao-lava-jato-e-o-petrolao/#:~:text=%E2%80%9CPetrol%C3%A3o%E2%80%9D%20%C3%A9%20um%20esquema%20bilion%C3%A1rio%20de%20corrup%C3%A7%C3%A3o%20na,cofres%20de%20partidos%2C%20funcion%C3%A1rios%20da%20estatal%20e%20pol%C3%ADticos.",
+        "https://pt.wikipedia.org/wiki/Esc%C3%A2ndalo_do_mensal%C3%A3o",
+        "https://g1.globo.com/politica/noticia/2025/05/02/o-que-a-pf-descobriu-na-investigacao-das-fraudes-no-inss-que-derrubou-lupi-do-governo.ghtml",
+        "https://pt.wikipedia.org/wiki/Esc%C3%A2ndalo_do_Banco_Master"
     };
 
     private readonly Dictionary<string, int> PalavrasChave = new()
@@ -45,6 +49,8 @@ public class Crawler : BackgroundService
         ["prevaricação"] = 4,
         ["concussão"] = 4,
         ["crime contra a administração"] = 4,
+        ["fraudes"] = 4,
+        ["rombo"] = 4,
 
         // Categoria: Processos e Investigação (Onde a corrupção é reportada)
         ["improbidade administrativa"] = 4,
@@ -66,102 +72,119 @@ public class Crawler : BackgroundService
         ["favorecimento"] = 2
     };
 
-    public Crawler(ILogger<Crawler> logger, IMongoDatabase mongoClient)
+    public Crawler(ILogger<Crawler> logger, IDocumentoRepository repository)
     {
         _logger = logger;
-        _mongoClient = mongoClient;
+        _repository = repository;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("🚀 Iniciando crawler de corrupção");
+        _logger.LogInformation("Iniciando crawler de corrupção");
 
         try
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                var colecao = _mongoClient.GetCollection<DocumentoCrawlado>("documentos");
-                var saved = 0;
-
-                var tarefas = Seeds.Select(seed => RastrearSeedAsync(seed, colecao, stoppingToken)).ToList();
+                var tarefas = Seeds.Select(seed => RastrearSeedAsync(seed, stoppingToken)).ToList();
                 await Task.WhenAll(tarefas);
 
-                _logger.LogInformation("✅ Ciclo concluído | Documentos salvos: {Count}", saved);
+                _logger.LogInformation("Ciclo concluído");
                 await Task.Delay(TimeSpan.FromHours(24), stoppingToken);
             }
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("🛑 Crawler cancelado");
+            _logger.LogInformation("Crawler cancelado");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Erro no crawler");
+            _logger.LogError(ex, "Erro no crawler");
         }
     }
 
-    private async Task RastrearSeedAsync(string seed, IMongoCollection<DocumentoCrawlado> colecao, CancellationToken ct)
+    private async Task RastrearSeedAsync(string seed, CancellationToken ct)
     {
         try
         {
+            _logger.LogInformation("Iniciando rastreamento de: {Seed}", seed);
+
             var config = new CrawlConfiguration
             {
                 MaxPagesToCrawl = 20000,
-                MaxCrawlDepth = 4,
+                MaxCrawlDepth = 5,
                 IsRespectRobotsDotTextEnabled = true,
                 MinCrawlDelayPerDomainMilliSeconds = 1500,
-                MaxConcurrentThreads = 5,
+                MaxConcurrentThreads = 10,
                 UserAgentString = "CorruptionRI-Bot/1.0 (Academic)",
             };
 
             var crawler = new PoliteWebCrawler(config);
+            var paginasProcessadas = 0;
 
             crawler.PageCrawlCompleted += async (sender, e) =>
             {
                 if (e.CrawledPage.HttpResponseMessage?.IsSuccessStatusCode == true)
                 {
-                    await ProcessarPaginaAsync(e.CrawledPage, colecao, ct);
+                    var url = e.CrawledPage.Uri.AbsoluteUri;
+                    var hashUrl = GerarHashUrl(url);
+
+                    var deveConsumir = await _repository.DeveConsumirUrl(hashUrl, ct);
+
+                    if (deveConsumir)
+                    {
+                        await ProcessarPaginaAsync(e.CrawledPage, ct);
+                        paginasProcessadas++;
+                        _logger.LogDebug("Processada (nova ou > 24h): {Url}", url[..Math.Min(80, url.Length)]);
+                    }
+                    else
+                    {
+                        _logger.LogDebug("Ignorada (< 24h ou sem relevância): {Url}", url[..Math.Min(80, url.Length)]);
+                    }
                 }
             };
 
             await crawler.CrawlAsync(new Uri(seed));
+            _logger.LogInformation("Seed finalizada: {Seed} | Páginas processadas: {Count}", seed, paginasProcessadas);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Erro ao rastrear seed: {Seed}", seed);
+            _logger.LogError(ex, "Erro ao rastrear seed: {Seed}", seed);
         }
     }
 
-    private async Task ProcessarPaginaAsync(CrawledPage page, IMongoCollection<DocumentoCrawlado> colecao, CancellationToken ct)
+    private async Task ProcessarPaginaAsync(CrawledPage page, CancellationToken ct)
     {
         try
         {
+            var url = page.Uri.AbsoluteUri;
+            var hashUrl = GerarHashUrl(url);
+
             var html = page.Content.Text ?? string.Empty;
             var (titulo, texto) = await ExtrairConteudoAsync(html);
-            var pontuacao = CalcularPontuacao(page.Uri.AbsoluteUri, titulo, texto);
+            var pontuacao = CalcularPontuacao(url, titulo, texto);
+
+            // Sempre atualizar documento (mesmo que com score 0)
+            var documento = new DocumentoCrawlado
+            {
+                HashUrl = hashUrl,
+                Url = url,
+                Titulo = pontuacao >= 2 ? titulo : "[Visitada - Sem Relevância]",
+                Texto = pontuacao >= 2 ? texto : string.Empty,
+                PontuacaoRelevancia = pontuacao,
+                ColetadoEm = DateTime.UtcNow
+            };
+
+            await _repository.SalvarAsync(documento, ct);
 
             if (pontuacao >= 2)
             {
-                var documento = new DocumentoCrawlado
-                {
-                    HashUrl = GerarHashUrl(page.Uri.AbsoluteUri),
-                    Url = page.Uri.AbsoluteUri,
-                    Titulo = titulo,
-                    Texto = texto,
-                    PontuacaoRelevancia = pontuacao,
-                    ColetadoEm = DateTime.UtcNow
-                };
-
-                var filtro = Builders<DocumentoCrawlado>.Filter.Eq(d => d.HashUrl, documento.HashUrl);
-                var opcoes = new ReplaceOptions { IsUpsert = true };
-                await colecao.ReplaceOneAsync(filtro, documento, opcoes, ct);
-
                 _logger.LogInformation("-> [{Score}] {Title}", pontuacao, titulo[..Math.Min(60, titulo.Length)]);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Erro ao processar página");
+            _logger.LogError(ex, "Erro ao processar página");
         }
     }
 
