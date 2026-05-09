@@ -1,6 +1,6 @@
-using Microsoft.Extensions.Hosting;
-using CorruptionTracker.Crawler.Services;
+using Abot2.Core;
 using CorruptionTracker.Crawler.Repositories;
+using CorruptionTracker.Crawler.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -8,8 +8,12 @@ builder.AddServiceDefaults();
 builder.AddRedisDistributedCache(connectionName: "cache");
 builder.AddMongoDBClient("mongodb");
 
-builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IDocumentoRepository, DocumentoRepository>();
+
+builder.Services.AddSingleton<PlaywrightBrowserService>();
+builder.Services.AddSingleton<PlaywrightDecisionService>();
+builder.Services.AddSingleton<IWebContentExtractor, WebContentExtractor>();
+
 builder.Services.AddHostedService<Crawler>();
 
 builder.Build().Run();

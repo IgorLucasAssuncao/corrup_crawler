@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,15 +12,24 @@
     <PackageReference Include="AngleSharp" Version="1.4.0" />
     <PackageReference Include="Aspire.MongoDB.Driver" Version="13.2.2" />
     <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.2.2" />
+    <PackageReference Include="Microsoft.Playwright" Version="1.59.0" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
     <PackageReference Include="MongoDB.Driver" Version="3.7.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CorruptionTracker.ServiceDefaults\CorruptionTracker.ServiceDefaults.csproj" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Services\Interfaces\" />
-  </ItemGroup>
+	
+<!-- Automação do Playwright para facilitar o Debug -->
+<Target Name="InstallPlaywrightBrowsers" AfterTargets="Build">
+  <Message Importance="high" Text="Verificando instalação do Playwright..." />
+  
+  <!-- Se estiver no Windows, instala automaticamente -->
+	<Exec Condition="'$(OS)' == 'Windows_NT'" Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -Command &quot;&amp; 'bin\$(Configuration)\$(TargetFramework)\playwright.ps1' install --with-deps&quot;" />
+  
+  <!-- Se estiver no Linux/Container, apenas avisa que o Dockerfile deve gerenciar -->
+  <Message Importance="high" Condition="'$(OS)' != 'Windows_NT'" Text="Ambiente Linux detectado. O Playwright deve ser instalado via Dockerfile (Build Ignorado)." />
+</Target>
 
 </Project>

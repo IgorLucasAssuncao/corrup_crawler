@@ -1,3 +1,4 @@
+using Abot2.Core;
 using Abot2.Crawler;
 using Abot2.Poco;
 using AngleSharp;
@@ -13,29 +14,43 @@ public class Crawler : BackgroundService
 {
     private readonly ILogger<Crawler> _logger;
     private readonly IDocumentoRepository _repository;
+    private readonly RssHyperLinkParser _rssHyperLinkParser;
+    private readonly PlaywrightBrowserService _playwrightBrowserService;
+    private readonly PlaywrightDecisionService _playwrightDecisionService;
 
     private readonly string[] Seeds = new[]
     {
-        "https://g1.globo.com/",
-        "https://www.folha.uol.com.br/",
-        "https://www.estadao.com.br/",
-        "https://apublica.org",
-        "https://theintercept.com/",
-        "https://www.portaldatransparencia.gov.br",
-        "https://www.cgu.gov.br/",
-        "https://www.mpf.mp.br/",
-        "https://www.jusbrasil.com.br/",
-        "https://transparenciainternacional.org.br",
-        "https://pt.wikipedia.org/wiki/Luiz_In%C3%A1cio_Lula_da_Silva",
-        "https://pt.wikipedia.org/wiki/Corrup%C3%A7%C3%A3o_no_Brasil",
-        "https://www.gazetadopovo.com.br/republica/suspeita-de-crimes-envolvendo-moraes-e-o-banco-master-impulsiona-pedidos-de-impeachment/",
-        "https://www.bbc.com/portuguese/articles/cvg555lkw9po",
-        "https://x.com/TI_InterBr/status/2034936047381983616",
-        "https://www1.folha.uol.com.br/folha-topicos/corrupcao/",
-        "https://www.infomoney.com.br/colunistas/economia-e-politica-direto-ao-ponto/especial-resumao-completo-sobre-a-operacao-lava-jato-e-o-petrolao/#:~:text=%E2%80%9CPetrol%C3%A3o%E2%80%9D%20%C3%A9%20um%20esquema%20bilion%C3%A1rio%20de%20corrup%C3%A7%C3%A3o%20na,cofres%20de%20partidos%2C%20funcion%C3%A1rios%20da%20estatal%20e%20pol%C3%ADticos.",
-        "https://pt.wikipedia.org/wiki/Esc%C3%A2ndalo_do_mensal%C3%A3o",
-        "https://g1.globo.com/politica/noticia/2025/05/02/o-que-a-pf-descobriu-na-investigacao-das-fraudes-no-inss-que-derrubou-lupi-do-governo.ghtml",
-        "https://pt.wikipedia.org/wiki/Esc%C3%A2ndalo_do_Banco_Master"
+    "https://pt.wikipedia.org/wiki/Corrup%C3%A7%C3%A3o_no_Brasil",
+    "https://pt.wikipedia.org/wiki/Esc%C3%A2ndalo_do_mensal%C3%A3o",
+    "https://pt.wikipedia.org/wiki/Esc%C3%A2ndalo_do_Banco_Master",
+    "https://pt.wikipedia.org/wiki/Opera%C3%A7%C3%A3o_Lava_Jato",
+    "https://pt.wikipedia.org/wiki/Petr%C3%B3leo_Brasileiro_S.A.",
+    "https://pt.wikipedia.org/wiki/Lista_de_senadores_do_Brasil",
+    "https://pt.wikipedia.org/wiki/Lista_de_presidentes_do_Brasil",
+    "https://www.mpf.mp.br/",
+    "https://www.cgu.gov.br/noticias",
+    "https://portal.tcu.gov.br/imprensa/noticias/",
+    //"https://apublica.org/categoria/corrupcao/",
+    //"https://apublica.org/feed/",
+    "https://theintercept.com/brasil/",
+    "https://theintercept.com/feed/?rss",
+    "https://piaui.folha.uol.com.br/",
+    "https://g1.globo.com/politica/", 
+    //"https://www.folha.uol.com.br/poder/", Verificar pq não funfa (tem paywall)
+    //"https://www1.folha.uol.com.br/folha-topicos/corrupcao/",
+    "https://www.estadao.com.br/politica/",
+    "https://www.gazetadopovo.com.br/republica/",
+    "https://g1.globo.com/politica/",
+    //"https://feeds.folha.uol.com.br/poder/rss091.xml",
+    "https://transparenciainternacional.org.br/posts/",
+    //"https://www.conjur.com.br/tag/corrupcao/",
+    //"https://www.conjur.com.br/tag/improbidade-administrativa/",
+    //"https://www.camara.leg.br/deputados/quem-sao",
+    "https://www25.senado.leg.br/web/senadores/em-exercicio",
+    "https://news.google.com/rss/search?q=when:7d+lava+jato&hl=pt-BR&gl=BR&ceid=BR:pt-419",
+    "https://news.google.com/rss/search?q=when:24h+corrup%C3%A7%C3%A3o+brasil&hl=pt-BR&gl=BR&ceid=BR:pt-419",
+    "https://www.bing.com/news/search?q=corrup%C3%A7%C3%A3o+brasil&mkt=pt-BR&freshness=Day&format=rss",
+    "https://www.bing.com/news/search?q=lava+jato&mkt=pt-BR&freshness=Week&format=rss"
     };
 
     private readonly Dictionary<string, int> PalavrasChave = new()
@@ -72,10 +87,13 @@ public class Crawler : BackgroundService
         ["favorecimento"] = 2
     };
 
-    public Crawler(ILogger<Crawler> logger, IDocumentoRepository repository)
+    public Crawler(ILogger<Crawler> logger, IDocumentoRepository repository, PlaywrightBrowserService playwrightBrowserService, PlaywrightDecisionService playwrightDecisionService)
     {
         _logger = logger;
         _repository = repository;
+        _rssHyperLinkParser = new RssHyperLinkParser(logger);
+        _playwrightBrowserService = playwrightBrowserService;
+        _playwrightDecisionService = playwrightDecisionService;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -111,15 +129,26 @@ public class Crawler : BackgroundService
 
             var config = new CrawlConfiguration
             {
-                MaxPagesToCrawl = 20000,
+                MaxPagesToCrawl = 10000,
                 MaxCrawlDepth = 5,
-                IsRespectRobotsDotTextEnabled = true,
+                IsRespectRobotsDotTextEnabled = false,
                 MinCrawlDelayPerDomainMilliSeconds = 1500,
-                MaxConcurrentThreads = 10,
-                UserAgentString = "CorruptionRI-Bot/1.0 (Academic)",
+                MaxConcurrentThreads = 3,
+                UserAgentString = "*",
+                DownloadableContentTypes = "text/html,application/xhtml+xml,application/xml"
             };
 
-            var crawler = new PoliteWebCrawler(config);
+            var crawler = new PoliteWebCrawler(
+                                            config,
+                                            crawlDecisionMaker: null,
+                                            threadManager: null,
+                                            scheduler: null,
+                                            pageRequester: new PlaywrightAwarePageRequester(config, new WebContentExtractor(), _playwrightBrowserService, _playwrightDecisionService, _logger),
+                                            htmlParser: _rssHyperLinkParser,
+                                            memoryManager: null,
+                                            domainRateLimiter: null,
+                                            robotsDotTextFinder: null
+                                            );
             var paginasProcessadas = 0;
 
             crawler.PageCrawlCompleted += async (sender, e) =>
@@ -135,16 +164,16 @@ public class Crawler : BackgroundService
                     {
                         await ProcessarPaginaAsync(e.CrawledPage, ct);
                         paginasProcessadas++;
-                        _logger.LogDebug("Processada (nova ou > 24h): {Url}", url[..Math.Min(80, url.Length)]);
+                        _logger.LogInformation("Processada (nova ou > 24h): {Url}", url[..Math.Min(80, url.Length)]);
                     }
                     else
                     {
-                        _logger.LogDebug("Ignorada (< 24h ou sem relevância): {Url}", url[..Math.Min(80, url.Length)]);
+                        _logger.LogInformation("Ignorada (< 24h ou sem relevância): {Url}", url[..Math.Min(80, url.Length)]);
                     }
                 }
             };
 
-            await crawler.CrawlAsync(new Uri(seed));
+            var result = await crawler.CrawlAsync(new Uri(seed)).ConfigureAwait(false);
             _logger.LogInformation("Seed finalizada: {Seed} | Páginas processadas: {Count}", seed, paginasProcessadas);
         }
         catch (Exception ex)
@@ -169,8 +198,8 @@ public class Crawler : BackgroundService
             {
                 HashUrl = hashUrl,
                 Url = url,
-                Titulo = pontuacao >= 2 ? titulo : "[Visitada - Sem Relevância]",
-                Texto = pontuacao >= 2 ? texto : string.Empty,
+                Titulo = titulo,
+                Texto = texto,
                 PontuacaoRelevancia = pontuacao,
                 ColetadoEm = DateTime.UtcNow
             };
@@ -190,28 +219,23 @@ public class Crawler : BackgroundService
 
     private async Task<(string titulo, string texto)> ExtrairConteudoAsync(string html)
     {
-        try
-        {
-            var context = BrowsingContext.New(Configuration.Default);
-            var documento = await context.OpenAsync(req => req.Content(html));
+        var context = BrowsingContext.New(Configuration.Default);
+        var documento = await context.OpenAsync(req => req.Content(html));
 
-            var titulo = documento.QuerySelector("h1")?.TextContent?.Trim()
-                         ?? documento.QuerySelector("title")?.TextContent?.Trim()
-                         ?? documento.Title?.Trim()
-                         ?? string.Empty;
+        var paraRemover = documento.QuerySelectorAll(
+            "nav, footer, script, style, .most-read, .related-posts, .newsletter-embed, .offcanvas-wrapper, .site-header, .site-footer, .share--article"
+        );
+        foreach (var item in paraRemover) item.Remove();
 
-            var texto = string.Join(" ",
-                documento.QuerySelectorAll("p, article, main, section")
-                    .Select(e => e.TextContent?.Trim())
-                    .Where(t => !string.IsNullOrWhiteSpace(t) && t.Length > 30)
-                    .ToList());
+        var container = documento.QuerySelector(".entry-content") ?? documento.Body;
 
-            return (titulo, texto);
-        }
-        catch
-        {
-            return (string.Empty, string.Empty);
-        }
+        var titulo = documento.QuerySelector("h1")?.TextContent?.Trim() ?? "";
+
+        var texto = string.Join(" ",
+            container.QuerySelectorAll("p")
+                .Select(e => e.TextContent?.Trim()));
+
+        return (titulo, texto);
     }
 
     private int CalcularPontuacao(string url, string titulo, string texto)
