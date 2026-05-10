@@ -4,11 +4,12 @@ using Abot2.Poco;
 using AngleSharp;
 using CorruptionTracker.Crawler.Models;
 using CorruptionTracker.Crawler.Repositories;
+using CorruptionTracker.Crawler.Services;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace CorruptionTracker.Crawler.Services;
+namespace CorruptionTracker.Crawler.BackGroundServices;
 
 public class Crawler : BackgroundService
 {
@@ -30,61 +31,20 @@ public class Crawler : BackgroundService
     "https://www.mpf.mp.br/",
     "https://www.cgu.gov.br/noticias",
     "https://portal.tcu.gov.br/imprensa/noticias/",
-    //"https://apublica.org/categoria/corrupcao/",
-    //"https://apublica.org/feed/",
     "https://theintercept.com/brasil/",
     "https://theintercept.com/feed/?rss",
     "https://piaui.folha.uol.com.br/",
     "https://g1.globo.com/politica/", 
-    //"https://www.folha.uol.com.br/poder/", Verificar pq não funfa (tem paywall)
-    //"https://www1.folha.uol.com.br/folha-topicos/corrupcao/",
     "https://www.estadao.com.br/politica/",
     "https://www.gazetadopovo.com.br/republica/",
     "https://g1.globo.com/politica/",
     //"https://feeds.folha.uol.com.br/poder/rss091.xml",
     "https://transparenciainternacional.org.br/posts/",
-    //"https://www.conjur.com.br/tag/corrupcao/",
-    //"https://www.conjur.com.br/tag/improbidade-administrativa/",
-    //"https://www.camara.leg.br/deputados/quem-sao",
     "https://www25.senado.leg.br/web/senadores/em-exercicio",
     "https://news.google.com/rss/search?q=when:7d+lava+jato&hl=pt-BR&gl=BR&ceid=BR:pt-419",
     "https://news.google.com/rss/search?q=when:24h+corrup%C3%A7%C3%A3o+brasil&hl=pt-BR&gl=BR&ceid=BR:pt-419",
     "https://www.bing.com/news/search?q=corrup%C3%A7%C3%A3o+brasil&mkt=pt-BR&freshness=Day&format=rss",
     "https://www.bing.com/news/search?q=lava+jato&mkt=pt-BR&freshness=Week&format=rss"
-    };
-
-    private readonly Dictionary<string, int> PalavrasChave = new()
-    {
-        // Categoria: Alta Gravidade (Indicam o ato de corrupção diretamente)
-        ["corrupção"] = 5,
-        ["propina"] = 5,
-        ["peculato"] = 5,
-        ["suborno"] = 5,
-        ["lavagem de dinheiro"] = 5,
-        ["prevaricação"] = 4,
-        ["concussão"] = 4,
-        ["crime contra a administração"] = 4,
-        ["fraudes"] = 4,
-        ["rombo"] = 4,
-
-        // Categoria: Processos e Investigação (Onde a corrupção é reportada)
-        ["improbidade administrativa"] = 4,
-        ["fraude em licitação"] = 4,
-        ["superfaturamento"] = 4,
-        ["esquema de desvio"] = 4,
-        ["investigação policial"] = 3,
-        ["operação deflagrada"] = 3,
-        ["denúncia do ministério público"] = 3,
-        ["processo administrativo disciplinar"] = 3,
-
-        // Categoria: Termos de Alerta e Transparência
-        ["indiciado"] = 2,
-        ["réu"] = 2,
-        ["condenação"] = 2,
-        ["ilegalidade"] = 2,
-        ["irregularidade"] = 2,
-        ["bloqueio de bens"] = 2,
-        ["favorecimento"] = 2
     };
 
     public Crawler(ILogger<Crawler> logger, IDocumentoRepository repository, PlaywrightBrowserService playwrightBrowserService, PlaywrightDecisionService playwrightDecisionService)
@@ -191,25 +151,18 @@ public class Crawler : BackgroundService
 
             var html = page.Content.Text ?? string.Empty;
             var (titulo, texto) = await ExtrairConteudoAsync(html);
-            var pontuacao = CalcularPontuacao(url, titulo, texto);
 
-            // Sempre atualizar documento (mesmo que com score 0)
             var documento = new DocumentoCrawlado
             {
                 HashUrl = hashUrl,
                 Url = url,
                 Titulo = titulo,
                 Texto = texto,
-                PontuacaoRelevancia = pontuacao,
-                ColetadoEm = DateTime.UtcNow
+                ColetadoEm = DateTime.UtcNow,
+                IndexadoEm = null
             };
 
             await _repository.SalvarAsync(documento, ct);
-
-            if (pontuacao >= 2)
-            {
-                _logger.LogInformation("-> [{Score}] {Title}", pontuacao, titulo[..Math.Min(60, titulo.Length)]);
-            }
         }
         catch (Exception ex)
         {
@@ -236,21 +189,6 @@ public class Crawler : BackgroundService
                 .Select(e => e.TextContent?.Trim()));
 
         return (titulo, texto);
-    }
-
-    private int CalcularPontuacao(string url, string titulo, string texto)
-    {
-        var conteudo = $"{url} {titulo} {texto}".ToLowerInvariant();
-        int score = 0;
-
-        foreach (var kv in PalavrasChave)
-        {
-            // Conta quantas vezes a chave aparece
-            var matches = Regex.Matches(conteudo, Regex.Escape(kv.Key));
-            score += matches.Count * kv.Value;
-        }
-
-        return score;
     }
 
     private static string GerarHashUrl(string url)

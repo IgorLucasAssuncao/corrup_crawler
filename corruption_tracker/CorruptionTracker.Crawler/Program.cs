@@ -1,4 +1,5 @@
 using Abot2.Core;
+using CorruptionTracker.Crawler.BackGroundServices;
 using CorruptionTracker.Crawler.Repositories;
 using CorruptionTracker.Crawler.Services;
 
@@ -15,5 +16,6 @@ builder.Services.AddSingleton<PlaywrightDecisionService>();
 builder.Services.AddSingleton<IWebContentExtractor, WebContentExtractor>();
 
 builder.Services.AddHostedService<Crawler>();
+builder.Services.AddHostedService<IndexBackgroundService>();
 
 builder.Build().Run();

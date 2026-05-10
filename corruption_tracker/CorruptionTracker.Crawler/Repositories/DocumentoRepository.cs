@@ -65,7 +65,7 @@ public class DocumentoRepository : IDocumentoRepository
             if (documento == null) return true;
 
             // Atualiza o cache com os dados atuais do banco
-            await SalvarNoCacheAsync(hashUrl, documento.ColetadoEm, documento.PontuacaoRelevancia, ct);
+            await SalvarNoCacheAsync(hashUrl, documento.ColetadoEm, ct);
 
             return (DateTime.UtcNow - documento.ColetadoEm).TotalHours < 24;
         }
@@ -87,7 +87,7 @@ public class DocumentoRepository : IDocumentoRepository
             await colecao.ReplaceOneAsync(filtro, documento, opcoes, ct);
 
             // Salva no cache a data e a pontuação
-            await SalvarNoCacheAsync(documento.HashUrl, documento.ColetadoEm, documento.PontuacaoRelevancia, ct);
+            await SalvarNoCacheAsync(documento.HashUrl, documento.ColetadoEm, ct);
         }
         catch (Exception ex)
         {
@@ -95,9 +95,9 @@ public class DocumentoRepository : IDocumentoRepository
         }
     }
 
-    private async Task SalvarNoCacheAsync(string hashUrl, DateTime data, int pontuacao, CancellationToken ct)
+    private async Task SalvarNoCacheAsync(string hashUrl, DateTime data, CancellationToken ct)
     {
-        var info = new CacheDocumentoInfo { ColetadoEm = data, Pontuacao = pontuacao };
+        var info = new CacheDocumentoInfo { ColetadoEm = data};
         var json = JsonSerializer.Serialize(info);
 
         await _cache.SetStringAsync(
