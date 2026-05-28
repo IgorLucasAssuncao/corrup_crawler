@@ -16,4 +16,10 @@ builder.AddProject<Projects.CorruptionTracker_Crawler>("crawler")
     .WaitFor(redis)
     .WaitFor(mongodb);
 
+// Novo projeto de API — expõe a busca ao frontend
+builder.AddProject<Projects.CorruptionTracker_Api>("api")
+    .WithReference(mongodb)
+    .WaitFor(mongodb)
+    .WithHttpsEndpoint(port: 7000, name: "https");
+
 builder.Build().Run();

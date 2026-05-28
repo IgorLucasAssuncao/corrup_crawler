@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="CorruptionTracker.Api/CorruptionTracker.Api.csproj" />
   <Project Path="CorruptionTracker.AppHost/CorruptionTracker.AppHost.csproj" />
   <Project Path="CorruptionTracker.Crawler/CorruptionTracker.Crawler.csproj" />
   <Project Path="CorruptionTracker.ServiceDefaults/CorruptionTracker.ServiceDefaults.csproj" />
