@@ -2,13 +2,33 @@ import { type SearchResult } from "../types/SearchResult";
 
 type Props = {
     result: SearchResult;
+    highlightTerms: string[];
 };
 
-export function SearchResultCard({ result }: Props) {
-    const preview =
-        result.texto.length > 250
-            ? result.texto.substring(0, 250) + "..."
-            : result.texto;
+function Highlight({ text, terms }: { text: string; terms: string[] }) {
+    if (terms.length === 0) return <>{text}</>;
+
+    const pattern = terms
+        .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join("|");
+    const regex = new RegExp(`(${pattern})`, "gi");
+    const parts = text.split(regex);
+
+    return (
+        <>
+            {parts.map((part, i) =>
+                regex.test(part) ? (
+                    <mark key={i} className="highlight">{part}</mark>
+                ) : (
+                    <span key={i}>{part}</span>
+                )
+            )}
+        </>
+    );
+}
+
+export function SearchResultCard({ result, highlightTerms }: Props) {
+    const date = new Date(result.collectedAt).toLocaleDateString("pt-BR");
 
     return (
         <div className="result-card">
@@ -18,15 +38,18 @@ export function SearchResultCard({ result }: Props) {
                 rel="noreferrer"
                 className="result-title"
             >
-                {result.titulo}
+                {result.title}
             </a>
 
+            <p className="result-url">{result.domain}</p>
+
             <p className="result-preview">
-                {preview}
+                <Highlight text={result.preview} terms={highlightTerms} />
             </p>
 
             <div className="result-footer">
-                Relevância: {result.pontuacaoRelevancia}
+                <span>Score: {result.score.toFixed(2)}</span>
+                <span style={{ marginLeft: "16px" }}>Collected: {date}</span>
             </div>
         </div>
     );

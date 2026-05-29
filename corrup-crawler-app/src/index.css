@@ -114,3 +114,118 @@ body {
     color: red;
     margin-bottom: 20px;
 }
+
+/*Pagination*/
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    margin-top: 32px;
+    flex-wrap: wrap;
+}
+
+.pagination-btn {
+    padding: 8px 14px;
+    border: 1px solid #ccc;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s, color 0.15s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background: #111827;
+    color: white;
+    border-color: #111827;
+}
+
+.pagination-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.pagination-btn--active {
+    background: #111827;
+    color: white;
+    border-color: #111827;
+}
+
+.pagination-ellipsis {
+    padding: 8px 4px;
+    color: #666;
+    font-size: 14px;
+}
+
+/* Filtersbar */
+.filters-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.filter-label {
+    font-size: 12px;
+    color: #666;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.filter-select,
+.filter-input {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 14px;
+    background: #f9f9f9;
+    color: #222;
+    cursor: pointer;
+}
+
+.filter-select:focus,
+.filter-input:focus {
+    outline: none;
+    border-color: #111827;
+}
+
+.filter-clear {
+    padding: 8px 14px;
+    border: 1px solid #ccc;
+    background: white;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    color: #666;
+    align-self: flex-end;
+    transition: all 0.15s;
+}
+
+.filter-clear:hover {
+    background: #f5f5f5;
+    border-color: #999;
+    color: #333;
+}
+
+/* Highlight de termos */
+.highlight {
+    background: #fff3b0;
+    color: #5a4000;
+    border-radius: 3px;
+    padding: 0 2px;
+    font-style: normal;
+}

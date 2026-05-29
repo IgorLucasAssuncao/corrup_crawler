@@ -1,13 +1,40 @@
 import { useState } from "react";
 import { SearchBar } from "../components/SearchBar";
 import { SearchResultCard } from "../components/SearchResultCard";
+import { SearchFilters } from "../components/SearchFilters";
+import { RecentsNewsGrid } from "../components/RecentsNewsGrid";
 import { Loading } from "../components/Loading";
+import { Paginations } from "../components/Paginations";
 import { useSearch } from "../hooks/useSearch";
+import { useRecentDocuments } from "../hooks/UseRecentDocuments";
+import { type SearchFilter } from "../types/SearchResult";
+
+const FILTROS_PADRAO: SearchFilters = {
+    dataInicio: "",
+    dataFim: "",
+    ordenacao: "Relevancia",
+};
 
 export function Home() {
     const [term, setTerm] = useState("");
+    const [pagina, setPagina] = useState(1);
+    const [filtros, setFiltros] = useState<SearchFilters>(FILTROS_PADRAO);
 
-    const { data, isLoading, isError } = useSearch(term);
+    const recentes = useRecentDocuments(12);
+    const busca = useSearch(term, pagina, filtros);
+
+    const termosDestaque = busca.data?.resultados[0]?.termosEncontrados ?? [];
+    const exibirHome = !term;
+
+    function handleSearch(novaTerm: string) {
+        setTerm(novaTerm);
+        setPagina(1);
+    }
+
+    function handleFiltros(novosFiltros: FiltrosBusca) {
+        setFiltros(novosFiltros);
+        setPagina(1);
+    }
 
     return (
         <div className="container">
@@ -15,175 +42,66 @@ export function Home() {
                 Vigia <span className="brasilTitle">Brasil</span> 🕵️
             </h1>
 
-            <SearchBar onSearch={setTerm} />
+            <SearchBar onSearch={handleSearch} />
 
-            {isLoading && <Loading />}
-
-            {isError && (
-                <div className="error">
-                    Erro ao buscar resultados.
-                </div>
+            {/* ── Estado: home (sem busca ativa) ── */}
+            {exibirHome && (
+                <>
+                    {recentes.isLoading && <Loading />}
+                    {recentes.isError && (
+                        <div className="error">Não foi possível carregar as notícias recentes.</div>
+                    )}
+                    {recentes.data && recentes.data.length > 0 && (
+                        <RecentNewsGrid documents={recentes.data} />
+                    )}
+                </>
             )}
 
-            {data && (
-                <div className="results-count">
-                    Resultados encontrados: {data.length}
-                </div>
+            {/* ── Estado: resultados de busca ── */}
+            {!exibirHome && (
+                <>
+                    <SearchFilters filtros={filtros} onChange={handleFiltros} />
+
+                    {busca.isLoading && <Loading />}
+
+                    {busca.isError && (
+                        <div className="error">
+                            Erro ao buscar resultados. Verifique se a API está rodando.
+                        </div>
+                    )}
+
+                    {busca.data && busca.data.total > 0 && (
+                        <div className="results-count">
+                            {busca.data.total} resultado{busca.data.total !== 1 ? "s" : ""} encontrado
+                            {busca.data.total !== 1 ? "s" : ""} — página {busca.data.pagina} de {busca.data.totalPaginas}
+                        </div>
+                    )}
+
+                    {busca.data && busca.data.total === 0 && !busca.isLoading && (
+                        <div className="results-count">
+                            Nenhum resultado encontrado para "<strong>{term}</strong>".
+                        </div>
+                    )}
+
+                    <div className="results-container">
+                        {busca.data?.resultados.map((result) => (
+                            <SearchResultCard
+                                key={result.id}
+                                result={result}
+                                termosDestaque={termosDestaque}
+                            />
+                        ))}
+                    </div>
+
+                    {busca.data && busca.data.totalPaginas > 1 && (
+                        <Paginations
+                            paginaAtual={pagina}
+                            totalPaginas={busca.data.totalPaginas}
+                            onMudar={setPagina}
+                        />
+                    )}
+                </>
             )}
-
-            <div className="results-container">
-                {data?.map((result) => (
-                    <SearchResultCard
-                        key={result.id}
-                        result={result}
-                    />
-                ))}
-            </div>
-
-            <div className="result-card">
-                <a
-                    target="_blank"
-                    rel="noreferrer"
-                    className="result-title"
-                    href="https://g1.globo.com/rj/rio-de-janeiro/noticia/2026/05/26/claudio-castro-trocou-cupula-da-rioprevidencia-antes-de-fundo-investir-no-master-diz-pf.ghtml"
-                >
-                    Cláudio Castro trocou cúpula da Rioprevidência antes de fundo investir R$ 3,7 bilhões no Master, diz PF
-                </a>
-
-                <p className="result-preview">
-                    Relatório da PF enviado ao STF aponta que mudanças em cargos estratégicos do Rioprevidência antecederam aportes bilionários em produtos ligados ao Banco Master. Defesa do ex-governador afirma que ele acompanhou buscas ‘com serenidade’.
-                </p>
-
-                <div className="result-footer">
-                    Relevância: 10
-                </div>
-            </div>
-            <div className="result-card">
-                <a
-                    target="_blank"
-                    rel="noreferrer"
-                    className="result-title"
-                    href="https://g1.globo.com/rj/rio-de-janeiro/noticia/2026/05/26/claudio-castro-trocou-cupula-da-rioprevidencia-antes-de-fundo-investir-no-master-diz-pf.ghtml"
-                >
-                    Cláudio Castro trocou cúpula da Rioprevidência antes de fundo investir R$ 3,7 bilhões no Master, diz PF
-                </a>
-
-                <p className="result-preview">
-                    Relatório da PF enviado ao STF aponta que mudanças em cargos estratégicos do Rioprevidência antecederam aportes bilionários em produtos ligados ao Banco Master. Defesa do ex-governador afirma que ele acompanhou buscas ‘com serenidade’.
-                </p>
-
-                <div className="result-footer">
-                    Relevância: 10
-                </div>
-            </div>
-            <div className="result-card">
-                <a
-                    target="_blank"
-                    rel="noreferrer"
-                    className="result-title"
-                    href="https://g1.globo.com/rj/rio-de-janeiro/noticia/2026/05/26/claudio-castro-trocou-cupula-da-rioprevidencia-antes-de-fundo-investir-no-master-diz-pf.ghtml"
-                >
-                    Cláudio Castro trocou cúpula da Rioprevidência antes de fundo investir R$ 3,7 bilhões no Master, diz PF
-                </a>
-
-                <p className="result-preview">
-                    Relatório da PF enviado ao STF aponta que mudanças em cargos estratégicos do Rioprevidência antecederam aportes bilionários em produtos ligados ao Banco Master. Defesa do ex-governador afirma que ele acompanhou buscas ‘com serenidade’.
-                </p>
-
-                <div className="result-footer">
-                    Relevância: 10
-                </div>
-            </div>
-            <div className="result-card">
-                <a
-                    target="_blank"
-                    rel="noreferrer"
-                    className="result-title"
-                    href="https://g1.globo.com/rj/rio-de-janeiro/noticia/2026/05/26/claudio-castro-trocou-cupula-da-rioprevidencia-antes-de-fundo-investir-no-master-diz-pf.ghtml"
-                >
-                    Cláudio Castro trocou cúpula da Rioprevidência antes de fundo investir R$ 3,7 bilhões no Master, diz PF
-                </a>
-
-                <p className="result-preview">
-                    Relatório da PF enviado ao STF aponta que mudanças em cargos estratégicos do Rioprevidência antecederam aportes bilionários em produtos ligados ao Banco Master. Defesa do ex-governador afirma que ele acompanhou buscas ‘com serenidade’.
-                </p>
-
-                <div className="result-footer">
-                    Relevância: 10
-                </div>
-            </div>
-            <div className="result-card">
-                <a
-                    target="_blank"
-                    rel="noreferrer"
-                    className="result-title"
-                    href="https://g1.globo.com/rj/rio-de-janeiro/noticia/2026/05/26/claudio-castro-trocou-cupula-da-rioprevidencia-antes-de-fundo-investir-no-master-diz-pf.ghtml"
-                >
-                    Cláudio Castro trocou cúpula da Rioprevidência antes de fundo investir R$ 3,7 bilhões no Master, diz PF
-                </a>
-
-                <p className="result-preview">
-                    Relatório da PF enviado ao STF aponta que mudanças em cargos estratégicos do Rioprevidência antecederam aportes bilionários em produtos ligados ao Banco Master. Defesa do ex-governador afirma que ele acompanhou buscas ‘com serenidade’.
-                </p>
-
-                <div className="result-footer">
-                    Relevância: 10
-                </div>
-            </div>
-            <div className="result-card">
-                <a
-                    target="_blank"
-                    rel="noreferrer"
-                    className="result-title"
-                    href="https://g1.globo.com/rj/rio-de-janeiro/noticia/2026/05/26/claudio-castro-trocou-cupula-da-rioprevidencia-antes-de-fundo-investir-no-master-diz-pf.ghtml"
-                >
-                    Cláudio Castro trocou cúpula da Rioprevidência antes de fundo investir R$ 3,7 bilhões no Master, diz PF
-                </a>
-
-                <p className="result-preview">
-                    Relatório da PF enviado ao STF aponta que mudanças em cargos estratégicos do Rioprevidência antecederam aportes bilionários em produtos ligados ao Banco Master. Defesa do ex-governador afirma que ele acompanhou buscas ‘com serenidade’.
-                </p>
-
-                <div className="result-footer">
-                    Relevância: 10
-                </div>
-            </div>
-            <div className="result-card">
-                <a
-                    target="_blank"
-                    rel="noreferrer"
-                    className="result-title"
-                    href="https://g1.globo.com/rj/rio-de-janeiro/noticia/2026/05/26/claudio-castro-trocou-cupula-da-rioprevidencia-antes-de-fundo-investir-no-master-diz-pf.ghtml"
-                >
-                    Cláudio Castro trocou cúpula da Rioprevidência antes de fundo investir R$ 3,7 bilhões no Master, diz PF
-                </a>
-
-                <p className="result-preview">
-                    Relatório da PF enviado ao STF aponta que mudanças em cargos estratégicos do Rioprevidência antecederam aportes bilionários em produtos ligados ao Banco Master. Defesa do ex-governador afirma que ele acompanhou buscas ‘com serenidade’.
-                </p>
-
-                <div className="result-footer">
-                    Relevância: 10
-                </div>
-            </div>
-            <div className="result-card">
-                <a
-                    target="_blank"
-                    rel="noreferrer"
-                    className="result-title"
-                    href="https://g1.globo.com/rj/rio-de-janeiro/noticia/2026/05/26/claudio-castro-trocou-cupula-da-rioprevidencia-antes-de-fundo-investir-no-master-diz-pf.ghtml"
-                >
-                    Cláudio Castro trocou cúpula da Rioprevidência antes de fundo investir R$ 3,7 bilhões no Master, diz PF
-                </a>
-
-                <p className="result-preview">
-                    Relatório da PF enviado ao STF aponta que mudanças em cargos estratégicos do Rioprevidência antecederam aportes bilionários em produtos ligados ao Banco Master. Defesa do ex-governador afirma que ele acompanhou buscas ‘com serenidade’.
-                </p>
-
-                <div className="result-footer">
-                    Relevância: 10
-                </div>
-            </div>
         </div>
     );
 }
