@@ -1,20 +1,22 @@
 ﻿<Project Sdk="Aspire.AppHost.Sdk/13.2.2">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <UserSecretsId>04210a2d-9c2b-46cb-b7ca-4a449c2c940d</UserSecretsId>
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<UserSecretsId>04210a2d-9c2b-46cb-b7ca-4a449c2c940d</UserSecretsId>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.MongoDB" Version="13.2.2" />
-    <PackageReference Include="Aspire.Hosting.Redis" Version="13.2.2" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Aspire.Hosting.MongoDB" Version="13.2.2" />
+		<PackageReference Include="Aspire.Hosting.Redis" Version="13.2.2" />
+		<ProjectReference Include="..\CorruptionTracker.Api\CorruptionTracker.Api.csproj" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\CorruptionTracker.Crawler\CorruptionTracker.Crawler.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\CorruptionTracker.Crawler\CorruptionTracker.Crawler.csproj" />
+		<ProjectReference Include="..\CorruptionTracker.Api\CorruptionTracker.Api.csproj" />
+	</ItemGroup>
 
 </Project>
