@@ -6,15 +6,6 @@ using MongoDB.Driver;
 
 namespace CorruptionTracker.Api.Services;
 
-/// <summary>
-/// Serviço de busca usando o índice invertido TF-IDF construído pelo Indexer.
-/// Pipeline:
-///   1. Tokeniza + stemma o termo de busca (mesmo analisador do Indexer)
-///   2. Para cada token, busca os postings ordenados por TF-IDF
-///   3. Soma os scores por documento (BM25-like)
-///   4. Hidrata com os dados do DocumentoCrawlado
-///   5. Retorna paginado
-/// </summary>
 public class SearchService
 {
     private readonly IMongoDatabase _db;
@@ -26,82 +17,123 @@ public class SearchService
         _analyzer = new BrazilianAnalyzer(LuceneVersion.LUCENE_48);
     }
 
-    public async Task<SearchResponse> BuscarAsync(
-        string query, int pagina, int tamanhoPagina, CancellationToken ct)
+    public async Task<SearchResponse> SearchAsync(
+        string query, int page, int pageSize, SearchFilters filters, CancellationToken ct)
     {
-        // 1. Tokenizar a query (mesmo pipeline do indexer)
-        var tokens = Tokenizar(query);
-
+        // 1. Tokenize query using the same pipeline as the indexer
+        var tokens = Tokenize(query);
         if (tokens.Count == 0)
-            return new SearchResponse { Total = 0, Pagina = pagina, Resultados = [] };
+            return new SearchResponse { Total = 0, Page = page, Results = [] };
 
-        // 2. Para cada token, buscar postings no MongoDB
-        var colecaoPostings = _db.GetCollection<PostingEntry>("postings");
-        var colecaoDocs = _db.GetCollection<DocumentoCrawlado>("documentos");
+        var postingsCollection = _db.GetCollection<PostingEntry>("postings");
+        var documentsCollection = _db.GetCollection<CrawledDocument>("documentos");
 
-        var scoresPorDoc = new Dictionary<string, double>();
-        var termosPorDoc = new Dictionary<string, HashSet<string>>();
+        // 2. If date filters are set, pre-fetch allowed document hashes
+        HashSet<string>? allowedHashes = null;
+        if (filters.StartDate.HasValue || filters.EndDate.HasValue)
+        {
+            var dateFilter = Builders<CrawledDocument>.Filter.Empty;
+            if (filters.StartDate.HasValue)
+                dateFilter &= Builders<CrawledDocument>.Filter.Gte(d => d.CollectedAt, filters.StartDate.Value);
+            if (filters.EndDate.HasValue)
+                dateFilter &= Builders<CrawledDocument>.Filter.Lte(d => d.CollectedAt, filters.EndDate.Value.AddDays(1));
+
+            var hashesInRange = await documentsCollection
+                .Find(dateFilter)
+                .Project(d => d.UrlHash)
+                .ToListAsync(ct);
+
+            allowedHashes = [.. hashesInRange];
+
+            if (allowedHashes.Count == 0)
+                return new SearchResponse { Total = 0, Page = page, Results = [] };
+        }
+
+        // 3. Accumulate TF-IDF scores per document for each query token
+        var scoresByDocument = new Dictionary<string, double>();
+        var matchedTermsByDocument = new Dictionary<string, HashSet<string>>();
 
         foreach (var token in tokens.Distinct())
         {
-            var filtro = Builders<PostingEntry>.Filter.Eq(p => p.Termo, token);
+            var postingFilter = Builders<PostingEntry>.Filter.Eq(p => p.Term, token);
+            if (allowedHashes is not null)
+                postingFilter &= Builders<PostingEntry>.Filter.In(p => p.DocumentHash, allowedHashes);
+
             var sort = Builders<PostingEntry>.Sort.Descending(p => p.TfIdf);
 
-            // Limita a 1000 postings por token para não explodir a memória
-            var postings = await colecaoPostings
-                .Find(filtro)
+            var postings = await postingsCollection
+                .Find(postingFilter)
                 .Sort(sort)
                 .Limit(1000)
                 .ToListAsync(ct);
 
             foreach (var posting in postings)
             {
-                scoresPorDoc.TryAdd(posting.DocHash, 0);
-                scoresPorDoc[posting.DocHash] += posting.TfIdf;
+                scoresByDocument.TryAdd(posting.DocumentHash, 0);
+                scoresByDocument[posting.DocumentHash] += posting.TfIdf;
 
-                if (!termosPorDoc.ContainsKey(posting.DocHash))
-                    termosPorDoc[posting.DocHash] = [];
-                termosPorDoc[posting.DocHash].Add(token);
+                if (!matchedTermsByDocument.ContainsKey(posting.DocumentHash))
+                    matchedTermsByDocument[posting.DocumentHash] = [];
+                matchedTermsByDocument[posting.DocumentHash].Add(token);
             }
         }
 
-        if (scoresPorDoc.Count == 0)
-            return new SearchResponse { Total = 0, Pagina = pagina, Resultados = [] };
+        if (scoresByDocument.Count == 0)
+            return new SearchResponse { Total = 0, Page = page, Results = [] };
 
-        // 3. Ordenar por score e paginar
-        var totalResultados = scoresPorDoc.Count;
-        var hashesOrdenados = scoresPorDoc
-            .OrderByDescending(kv => kv.Value)
-            .Skip((pagina - 1) * tamanhoPagina)
-            .Take(tamanhoPagina)
-            .Select(kv => kv.Key)
-            .ToList();
+        // 4. Sort and paginate
+        int totalResults = scoresByDocument.Count;
+        List<string> pageHashes;
 
-        // 4. Hidratar com os dados do documento
-        var filtroDocs = Builders<DocumentoCrawlado>.Filter.In(d => d.HashUrl, hashesOrdenados);
-        var documentos = await colecaoDocs.Find(filtroDocs).ToListAsync(ct);
-        var docsPorHash = documentos.ToDictionary(d => d.HashUrl);
+        if (filters.SortBy == SortOrder.Relevance)
+        {
+            pageHashes = scoresByDocument
+                .OrderByDescending(kv => kv.Value)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(kv => kv.Key)
+                .ToList();
+        }
+        else
+        {
+            // Sort by date: fetch all candidate hashes then let MongoDB sort by CollectedAt
+            var allCandidates = scoresByDocument.Keys.ToList();
+            pageHashes = await documentsCollection
+                .Find(Builders<CrawledDocument>.Filter.In(d => d.UrlHash, allCandidates))
+                .SortByDescending(d => d.CollectedAt)
+                .Skip((page - 1) * pageSize)
+                .Limit(pageSize)
+                .Project(d => d.UrlHash)
+                .ToListAsync(ct);
+        }
 
-        // 5. Montar resultados (mantendo a ordem por score)
-        var resultados = hashesOrdenados
-            .Where(hash => docsPorHash.ContainsKey(hash))
+        // 5. Hydrate current page documents
+        var documents = await documentsCollection
+            .Find(Builders<CrawledDocument>.Filter.In(d => d.UrlHash, pageHashes))
+            .ToListAsync(ct);
+        var documentsByHash = documents.ToDictionary(d => d.UrlHash);
+
+        // 6. Build results preserving sort order
+        var results = pageHashes
+            .Where(hash => documentsByHash.ContainsKey(hash))
             .Select(hash =>
             {
-                var doc = docsPorHash[hash];
-                var preview = doc.Texto.Length > 300
-                    ? doc.Texto[..300] + "..."
-                    : doc.Texto;
+                var doc = documentsByHash[hash];
+                var preview = doc.Content.Length > 400
+                    ? doc.Content[..400] + "..."
+                    : doc.Content;
 
                 return new SearchResult
                 {
                     Id = hash,
                     Url = doc.Url,
-                    Titulo = doc.Titulo,
+                    Domain = ExtractDomain(doc.Url),
+                    Title = doc.Title,
                     Preview = preview,
-                    Score = scoresPorDoc[hash],
-                    ColetadoEm = doc.ColetadoEm,
-                    TermosEncontrados = termosPorDoc.TryGetValue(hash, out var t)
-                        ? [.. t]
+                    Score = scoresByDocument[hash],
+                    CollectedAt = doc.CollectedAt,
+                    MatchedTerms = matchedTermsByDocument.TryGetValue(hash, out var terms)
+                        ? [.. terms]
                         : []
                 };
             })
@@ -109,23 +141,37 @@ public class SearchService
 
         return new SearchResponse
         {
-            Total = totalResultados,
-            Pagina = pagina,
-            TotalPaginas = (int)Math.Ceiling((double)totalResultados / tamanhoPagina),
-            Resultados = resultados
+            Total = totalResults,
+            Page = page,
+            TotalPages = (int)Math.Ceiling((double)totalResults / pageSize),
+            Results = results
         };
     }
 
-    private List<string> Tokenizar(string texto)
+    private static string ExtractDomain(string url)
+    {
+        try
+        {
+            var uri = new Uri(url);
+            var host = uri.Host;
+            return host.StartsWith("www.") ? host[4..] : host;
+        }
+        catch
+        {
+            return url;
+        }
+    }
+
+    private List<string> Tokenize(string text)
     {
         var tokens = new List<string>();
-        using var reader = new StringReader(texto);
+        using var reader = new StringReader(text);
         using var tokenStream = _analyzer.GetTokenStream("content", reader);
-        var termAttr = tokenStream.GetAttribute<ICharTermAttribute>();
+        var termAttribute = tokenStream.GetAttribute<ICharTermAttribute>();
         tokenStream.Reset();
         while (tokenStream.IncrementToken())
         {
-            var token = termAttr.ToString();
+            var token = termAttribute.ToString();
             if (token.Length >= 3 && token.Length <= 40 && !token.All(char.IsDigit))
                 tokens.Add(token);
         }

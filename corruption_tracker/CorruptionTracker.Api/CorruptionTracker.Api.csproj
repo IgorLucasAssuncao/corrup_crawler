@@ -20,7 +20,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Folder Include="Controllers\" />
 		<Folder Include="Models\" />
 		<ProjectReference Include="..\CorruptionTracker.ServiceDefaults\CorruptionTracker.ServiceDefaults.csproj" />
 	</ItemGroup>

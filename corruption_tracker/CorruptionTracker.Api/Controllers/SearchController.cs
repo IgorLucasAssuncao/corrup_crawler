@@ -18,27 +18,36 @@ public class SearchController : ControllerBase
     }
 
     /// <summary>
-    /// Busca documentos por termo usando o índice TF-IDF.
+    /// Search documents by term using the TF-IDF index.
     /// </summary>
-    /// <param name="q">Termo de busca</param>
-    /// <param name="pagina">Página (começa em 1)</param>
-    /// <param name="tamanhoPagina">Itens por página (máximo 50)</param>
+    /// <param name="q">Search term</param>
+    /// <param name="page">Page number (starts at 1)</param>
+    /// <param name="pageSize">Items per page (max 50)</param>
+    /// <param name="startDate">Start date filter (yyyy-MM-dd)</param>
+    /// <param name="endDate">End date filter (yyyy-MM-dd)</param>
+    /// <param name="sortBy">Relevance (default) or Latest</param>
     [HttpGet]
     public async Task<ActionResult<SearchResponse>> Get(
         [FromQuery] string q,
-        [FromQuery] int pagina = 1,
-        [FromQuery] int tamanhoPagina = 10,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] DateTime? startDate = null,
+        [FromQuery] DateTime? endDate = null,
+        [FromQuery] SortOrder sortBy = SortOrder.Relevance,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(q))
-            return BadRequest(new { erro = "O parâmetro 'q' é obrigatório." });
+            return BadRequest(new { error = "Query parameter 'q' is required." });
 
-        tamanhoPagina = Math.Clamp(tamanhoPagina, 1, 50);
-        pagina = Math.Max(1, pagina);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        page = Math.Max(1, page);
 
-        _logger.LogInformation("Busca: '{Termo}' | página {Pagina}", q, pagina);
+        _logger.LogInformation(
+            "Search: '{Term}' | page {Page} | sort {Sort} | range {Start}~{End}",
+            q, page, sortBy, startDate?.ToString("yyyy-MM-dd"), endDate?.ToString("yyyy-MM-dd"));
 
-        var resultado = await _searchService.BuscarAsync(q, pagina, tamanhoPagina, ct);
-        return Ok(resultado);
+        var filters = new SearchFilters(startDate, endDate, sortBy);
+        var result = await _searchService.SearchAsync(q, page, pageSize, filters, ct);
+        return Ok(result);
     }
 }
