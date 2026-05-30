@@ -2,38 +2,38 @@ import { useState } from "react";
 import { SearchBar } from "../components/SearchBar";
 import { SearchResultCard } from "../components/SearchResultCard";
 import { SearchFilters } from "../components/SearchFilters";
-import { RecentsNewsGrid } from "../components/RecentsNewsGrid";
+import { RecentNewsGrid } from "../components/RecentsNewsGrid";
 import { Loading } from "../components/Loading";
 import { Paginations } from "../components/Paginations";
 import { useSearch } from "../hooks/useSearch";
 import { useRecentDocuments } from "../hooks/UseRecentDocuments";
-import { type SearchFilter } from "../types/SearchResult";
+import { type SearchFilters as SearchFiltersType } from "../types/SearchResult";
 
-const FILTROS_PADRAO: SearchFilters = {
-    dataInicio: "",
-    dataFim: "",
-    ordenacao: "Relevancia",
+const DEFAULT_FILTERS: SearchFiltersType = {
+    startDate: "",
+    endDate: "",
+    sortBy: "Relevance",
 };
 
 export function Home() {
     const [term, setTerm] = useState("");
-    const [pagina, setPagina] = useState(1);
-    const [filtros, setFiltros] = useState<SearchFilters>(FILTROS_PADRAO);
+    const [page, setPage] = useState(1);
+    const [filters, setFilters] = useState<SearchFiltersType>(DEFAULT_FILTERS);
 
-    const recentes = useRecentDocuments(12);
-    const busca = useSearch(term, pagina, filtros);
+    const recentDocs = useRecentDocuments(12);
+    const searchQuery = useSearch(term, page, filters);
 
-    const termosDestaque = busca.data?.resultados[0]?.termosEncontrados ?? [];
-    const exibirHome = !term;
+    const highlightTerms = searchQuery.data?.results[0]?.matchedTerms ?? [];
+    const showHome = !term;
 
-    function handleSearch(novaTerm: string) {
-        setTerm(novaTerm);
-        setPagina(1);
+    function handleSearch(newTerm: string) {
+        setTerm(newTerm);
+        setPage(1);
     }
 
-    function handleFiltros(novosFiltros: FiltrosBusca) {
-        setFiltros(novosFiltros);
-        setPagina(1);
+    function handleFilters(newFilters: SearchFiltersType) {
+        setFilters(newFilters);
+        setPage(1);
     }
 
     return (
@@ -44,60 +44,60 @@ export function Home() {
 
             <SearchBar onSearch={handleSearch} />
 
-            {/* ── Estado: home (sem busca ativa) ── */}
-            {exibirHome && (
+            {/* ── Home state (no active search) ── */}
+            {showHome && (
                 <>
-                    {recentes.isLoading && <Loading />}
-                    {recentes.isError && (
-                        <div className="error">Não foi possível carregar as notícias recentes.</div>
+                    {recentDocs.isLoading && <Loading />}
+                    {recentDocs.isError && (
+                        <div className="error">Could not load recent news.</div>
                     )}
-                    {recentes.data && recentes.data.length > 0 && (
-                        <RecentNewsGrid documents={recentes.data} />
+                    {recentDocs.data && recentDocs.data.length > 0 && (
+                        <RecentNewsGrid documents={recentDocs.data} />
                     )}
                 </>
             )}
 
-            {/* ── Estado: resultados de busca ── */}
-            {!exibirHome && (
+            {/* ── Search results state ── */}
+            {!showHome && (
                 <>
-                    <SearchFilters filtros={filtros} onChange={handleFiltros} />
+                    <SearchFilters filters={filters} onChange={handleFilters} />
 
-                    {busca.isLoading && <Loading />}
+                    {searchQuery.isLoading && <Loading />}
 
-                    {busca.isError && (
+                    {searchQuery.isError && (
                         <div className="error">
-                            Erro ao buscar resultados. Verifique se a API está rodando.
+                            Error fetching results. Make sure the API is running.
                         </div>
                     )}
 
-                    {busca.data && busca.data.total > 0 && (
+                    {searchQuery.data && searchQuery.data.total > 0 && (
                         <div className="results-count">
-                            {busca.data.total} resultado{busca.data.total !== 1 ? "s" : ""} encontrado
-                            {busca.data.total !== 1 ? "s" : ""} — página {busca.data.pagina} de {busca.data.totalPaginas}
+                            {searchQuery.data.total} result{searchQuery.data.total !== 1 ? "s" : ""} found
+                            {" "}— page {searchQuery.data.page} of {searchQuery.data.totalPages}
                         </div>
                     )}
 
-                    {busca.data && busca.data.total === 0 && !busca.isLoading && (
+                    {searchQuery.data && searchQuery.data.total === 0 && !searchQuery.isLoading && (
                         <div className="results-count">
-                            Nenhum resultado encontrado para "<strong>{term}</strong>".
+                            No results found for "<strong>{term}</strong>".
                         </div>
                     )}
 
                     <div className="results-container">
-                        {busca.data?.resultados.map((result) => (
+                        {searchQuery.data?.results.map((result) => (
                             <SearchResultCard
                                 key={result.id}
                                 result={result}
-                                termosDestaque={termosDestaque}
+                                highlightTerms={highlightTerms}
                             />
                         ))}
                     </div>
 
-                    {busca.data && busca.data.totalPaginas > 1 && (
+                    {searchQuery.data && searchQuery.data.totalPages > 1 && (
                         <Paginations
-                            paginaAtual={pagina}
-                            totalPaginas={busca.data.totalPaginas}
-                            onMudar={setPagina}
+                            paginaAtual={page}
+                            totalPaginas={searchQuery.data.totalPages}
+                            onMudar={setPage}
                         />
                     )}
                 </>
