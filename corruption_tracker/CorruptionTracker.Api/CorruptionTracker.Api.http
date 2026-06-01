@@ -1,0 +1,6 @@
+@CorruptionTracker.Api_HostAddress = http://localhost:5216
+
+GET {{CorruptionTracker.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
