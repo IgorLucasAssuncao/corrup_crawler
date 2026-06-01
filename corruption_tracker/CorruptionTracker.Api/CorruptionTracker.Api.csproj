@@ -15,12 +15,13 @@
 		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
 		<PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00017" />
 		<PackageReference Include="MongoDB.Driver" Version="3.7.1" />
-		<PackageReference Include="Aspire.MongoDB.Driver" Version="9.3.0" />
-		<PackageReference Include="Swashbuckle.AspNetCore" Version="7.3.1" />
+		<PackageReference Include="Aspire.MongoDB.Driver" Version="13.2.2" />
+		<PackageReference Include="Scalar.AspNetCore" Version="2.14.14" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<Folder Include="Models\" />
+		<ProjectReference Include="..\CorruptionTracker.Crawler\CorruptionTracker.Crawler.csproj" />
 		<ProjectReference Include="..\CorruptionTracker.ServiceDefaults\CorruptionTracker.ServiceDefaults.csproj" />
 	</ItemGroup>
 

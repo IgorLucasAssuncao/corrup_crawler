@@ -1,4 +1,5 @@
 using CorruptionTracker.Api.Services;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,18 +9,14 @@ builder.AddMongoDBClient("mongodb");
 builder.Services.AddScoped<SearchService>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddOpenApi();
 
-// CORS: permite que o frontend React acesse a API
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:5173",   // Vite dev server (padrão)
-                "http://localhost:4173"    // Vite preview
-            )
+            .AllowAnyOrigin()
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -29,8 +26,8 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseCors();

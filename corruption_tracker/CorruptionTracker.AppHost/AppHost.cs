@@ -1,4 +1,6 @@
-﻿var builder = DistributedApplication.CreateBuilder(args);
+﻿using Aspire.Hosting.JavaScript;
+
+var builder = DistributedApplication.CreateBuilder(args);
 
 var mongo = builder.AddMongoDB("mongo", port: 27017)
                     .WithLifetime(ContainerLifetime.Persistent)
@@ -19,7 +21,9 @@ builder.AddProject<Projects.CorruptionTracker_Crawler>("crawler")
 // Novo projeto de API — expõe a busca ao frontend
 builder.AddProject<Projects.CorruptionTracker_Api>("api")
     .WithReference(mongodb)
-    .WaitFor(mongodb)
-    .WithHttpsEndpoint(port: 7000, name: "https");
+    .WaitFor(mongodb);
+
+builder.AddViteApp("frontend", "../../corrup-crawler-app")
+  .WithExternalHttpEndpoints();
 
 builder.Build().Run();

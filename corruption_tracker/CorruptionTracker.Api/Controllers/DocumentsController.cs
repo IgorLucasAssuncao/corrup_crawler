@@ -1,4 +1,5 @@
 ﻿using CorruptionTracker.Api.Models;
+using CorruptionTracker.Crawler.Models;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 
@@ -27,22 +28,22 @@ public class DocumentsController : ControllerBase
     {
         count = Math.Clamp(count, 1, 50);
 
-        var collection = _db.GetCollection<CrawledDocument>("documentos");
+        var collection = _db.GetCollection<DocumentoCrawlado>("documentos");
 
         var documents = await collection
-            .Find(FilterDefinition<CrawledDocument>.Empty)
-            .SortByDescending(d => d.CollectedAt)
+            .Find(FilterDefinition<DocumentoCrawlado>.Empty)
+            .SortByDescending(d => d.ColetadoEm)
             .Limit(count)
             .ToListAsync(ct);
 
         var result = documents.Select(d => new RecentDocument
         {
-            Id = d.UrlHash,
+            Id = d.HashUrl,
             Url = d.Url,
             Domain = ExtractDomain(d.Url),
-            Title = d.Title,
-            Preview = d.Content.Length > 300 ? d.Content[..300] + "..." : d.Content,
-            CollectedAt = d.CollectedAt,
+            Title = d.Titulo,
+            Preview = d.Texto.Length > 300 ? d.Texto[..300] + "..." : d.Texto,
+            CollectedAt = d.ColetadoEm,
         }).ToList();
 
         return Ok(result);
